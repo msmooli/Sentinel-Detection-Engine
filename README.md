@@ -7,7 +7,7 @@ This repository serves as a **Detection-as-Code** framework designed to automate
 The framework is built on the principle of **Continuous Integration/Continuous Deployment (CI/CD)** for security operations:
 * **Logic:** Standardized KQL queries wrapped in ARM/JSON templates for native Azure deployment.
 * **Validation:** Integrated Red-Team simulation scripts to perform unit testing on every detection.
-* **Governance:** GitHub acts as the 'Single Source of Truth,' providing a full version history of all defensive logic.
+* **Governance:** GitHub provides a full version history of all defensive logic.
 
 ##  Technical Stack
 * **SIEM/SOAR:** Microsoft Sentinel
