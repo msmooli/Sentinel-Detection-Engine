@@ -30,7 +30,7 @@ The framework is built on the principle of **Continuous Integration/Continuous D
 | **Brute Force Success** | T1110 | Credential Access | Critical |
 
 ##  Deployment & Testing
-1. **Sync:** Link this repository to a Sentinel workspace via the **Content Management** blade.
+1. **Sync:** Link this repository to a Sentinel workspace via the **Content Management** integration.
 2. **Automate:** GitHub Actions will automatically deploy committed JSON templates to the SIEM.
 3. **Verify:** Execute `./Validation/simulate_attack.ps1` on a target endpoint to trigger alerts and validate the detection pipeline.
 
