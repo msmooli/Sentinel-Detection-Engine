@@ -1,7 +1,7 @@
 An Enterprise Detection-as-Code (DaC) Framework for Microsoft Sentinel
 
 ##   Summary
-This repository serves as a **Detection-as-Code** framework designed to automate the lifecycle of security telemetry within **Microsoft Sentinel**. By transitioning from manual portal configurations to a **GitOps workflow**, this ensures that security logic is auditable, scalable, and resilient.
+*This repository implements an Enterprise Detection-as-Code (DaC) framework designed to orchestrate the end-to-end lifecycle of security telemetry within Microsoft Sentinel. By replacing manual portal configurations with a GitOps pipeline, this ensures that defensive logic remains auditable, scalable, and resilient against unauthorized changes.* 
 
 ##  Architectural Overview
 The framework is built on the principle of **Continuous Integration/Continuous Deployment (CI/CD)** for security operations:
@@ -14,7 +14,7 @@ The framework is built on the principle of **Continuous Integration/Continuous D
 * **Query Language:** Kusto Query Language (KQL)
 * **Automation:** GitHub Actions / Sentinel Repositories
 * **Schema:** Azure Resource Manager (ARM)
-* **Testing:** PowerShell (Security Simulation)
+* **Testing:** PowerShell
 
 ##  Repository Structure
 | Directory | Purpose |
