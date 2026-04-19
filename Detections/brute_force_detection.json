@@ -1,1 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2020-01-01",
+      "name": "RDP-Hijacking-Detection",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "T1563.002 - Lateral Movement via RDP Hijacking",
+        "description": "Detects multiple RDP sessions from a single account, indicating potential session hijacking.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "SecurityEvent | where EventID == 4624 and LogonType == 10 | summarize RemoteSessions = dcount(IpAddress) by Computer, Account | where RemoteSessions > 1",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2020-01-01",
+      "name": "Persistence-New-Service",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "T1543.003 - Persistence via New Service Creation",
+        "description": "Detects the creation of a new system service, a common persistence mechanism for malware.",
+        "severity": "High",
+        "enabled": true,
+        "query": "SecurityEvent | where EventID == 4697 | extend ServiceName = RenderedDescription | project TimeGenerated, Computer, Account, ServiceName",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}
+
 
