@@ -9,25 +9,6 @@
 
 ---
 
-## 📋 Table of Contents
-
-1. [The Problem This Solves](#-the-problem-this-solves)
-2. [How It Works](#-how-it-works)
-3. [Repository Structure](#-repository-structure)
-4. [Technical Stack](#-technical-stack)
-5. [Detection Coverage](#-detection-coverage)
-6. [Prerequisites](#-prerequisites)
-7. [Setup Guide](#-setup-guide)
-8. [Writing a New Detection Rule](#-writing-a-new-detection-rule)
-9. [Running the Validation Script](#-running-the-validation-script)
-10. [Submitting a Pull Request](#-submitting-a-pull-request)
-11. [Understanding the CI Gates](#-understanding-the-ci-gates)
-12. [No Azure Access? Practice Here](#-no-azure-access-practice-here)
-13. [Troubleshooting](#-troubleshooting)
-14. [Glossary](#-glossary)
-
----
-
 ## 🎯 The Problem This Solves
 
 Most security teams manage detection rules by clicking around in their SIEM portal. This creates three serious problems:
