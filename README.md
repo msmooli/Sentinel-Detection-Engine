@@ -15,8 +15,6 @@
 - [Deployment guide](#deployment-guide)
 - [Validation & testing](#validation--testing)
 - [Governance model](#governance-model)
-- [Contributing](#contributing)
-
 ---
 
 ## Overview
@@ -220,17 +218,5 @@ If events are present, the full telemetry pipeline — endpoint → AMA agent �
 | Audit evidence | GitHub PR history is the change management record |
 
 This directly satisfies common compliance requirements for documented and authorized changes to security controls (SOC 2, NIST 800-53, ISO 27001).
-
----
-
-## Contributing
-
-1. **Branch** — create a feature branch from `main`
-2. **Write** — author the detection template in `/Detections` using the existing files as a schema reference
-3. **Test locally** — run `simulate_attack.ps1` against a test endpoint and confirm the expected EventID appears in Log Analytics
-4. **Simulate** — add or update the corresponding simulation block in `/Validation`
-5. **Pull request** — open a PR with a description that includes the MITRE technique ID, the detection logic rationale, and confirmation that local testing passed
-6. **Review** — a second engineer must approve before merge
-7. **Pipeline** — all three CI gates must pass; the PR remains blocked until they do
 
 ---
