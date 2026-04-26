@@ -92,11 +92,13 @@ Sentinel-Detection-Engine/
 
 ## Detection coverage
 
-| Rule name | MITRE technique | Tactic | Severity 
-| :--- | :--- | :--- | :--- | :--- |
-| RDP hijacking | T1563.002 | Lateral Movement | Medium
-| New service creation | T1543.003 | Persistence | High
-| Brute force success | T1110 | Credential Access | Critical 
+ Rule name | MITRE technique | Tactic | Severity 
+
+ RDP hijacking | T1563.002 | Lateral Movement | Medium
+
+ New service creation | T1543.003 | Persistence | High
+
+ Brute force success | T1110 | Credential Access | Critical 
 
 ### Detection notes
 
