@@ -729,8 +729,5 @@ If you are not on the designated test VM, do not attempt to bypass this check.
 7. Open a pull request using the PR template
 8. All three CI gates must pass — the PR stays blocked until they do
 
-**Questions?** Open a GitHub Issue with the `help-wanted` label.
-**Found a bug?** Open a GitHub Issue with the `bug` label.
-
 ---
 Created by Mark Mooli
