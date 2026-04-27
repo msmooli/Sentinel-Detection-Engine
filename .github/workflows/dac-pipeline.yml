@@ -1,0 +1,11 @@
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Detections/**'
+      - 'Validation/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Detections/**'
+      - 'Validation/**'
