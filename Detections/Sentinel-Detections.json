@@ -1,42 +1,100 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": { "description": "Log Analytics workspace name" }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
   "resources": [
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2020-01-01",
-      "name": "RDP-Hijacking-Detection",
+      "apiVersion": "2022-11-01-preview",
+
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/REPLACE-UNIQUE-RULE-ID')]",
+
       "kind": "Scheduled",
+      "location": "[parameters('location')]",
       "properties": {
-        "displayName": "T1563.002 - Lateral Movement via RDP Hijacking",
-        "description": "Detects multiple RDP sessions from a single account, indicating potential session hijacking.",
-        "severity": "Medium",
+
+        "displayName": "REPLACE — Rule name including technique ID e.g. Suspicious PowerShell Execution (T1059.001)",
+
+        "description": "REPLACE — 2-3 sentences: (1) what this detects, (2) what the attacker is doing, (3) triage guidance. Write it so an analyst understands what fired and what to check first.",
+
+        "severity": "REPLACE — one of: Informational | Low | Medium | High | Critical",
+
+        "status": "Observation",
+
         "enabled": true,
-        "query": "SecurityEvent | where EventID == 4624 and LogonType == 10 | summarize RemoteSessions = dcount(IpAddress) by Computer, Account | where RemoteSessions > 1",
-        "queryFrequency": "PT1H",
+
+        "query": "REPLACE — paste your KQL here. Escape newlines as \\n and backslashes as \\\\ before pasting into JSON. Test in Sentinel Logs first. Column names here must match entityMappings below.",
+
+        "queryFrequency": "PT5M",
+
         "queryPeriod": "PT1H",
+
         "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "apiVersion": "2020-01-01",
-      "name": "Persistence-New-Service",
-      "kind": "Scheduled",
-      "properties": {
-        "displayName": "T1543.003 - Persistence via New Service Creation",
-        "description": "Detects the creation of a new system service, a common persistence mechanism for malware.",
-        "severity": "High",
-        "enabled": true,
-        "query": "SecurityEvent | where EventID == 4697 | extend ServiceName = RenderedDescription | project TimeGenerated, Computer, Account, ServiceName",
-        "queryFrequency": "PT1H",
-        "queryPeriod": "PT1H",
-        "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0
+        "triggerThreshold": 0,
+
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+
+        "tactics": [
+          "REPLACE — e.g. Persistence"
+        ],
+
+        "techniques": [
+          "REPLACE — e.g. T1543.003"
+        ],
+
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "REPLACE — must match a column returned by your query e.g. Computer"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "REPLACE — e.g. SubjectUserName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "REPLACE — e.g. SubjectDomainName"
+              }
+            ]
+          }
+        ],
+
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "REPLACE — Dynamic title using {{ColumnName}} syntax e.g. Suspicious service on {{Computer}}",
+          "alertDescriptionFormat": "REPLACE — Dynamic body e.g. Service {{ServiceName}} created with path {{ServiceFileName}}"
+        },
+
+        "incidentConfiguration": {
+          "createIncident": false,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        }
       }
     }
   ]
 }
-
-
