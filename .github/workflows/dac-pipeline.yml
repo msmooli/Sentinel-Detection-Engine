@@ -335,3 +335,4 @@ jobs:
 
           echo "✅ Sync triggered. Rules will be live in Sentinel within 2-3 minutes."
           echo "   Verify: Azure Portal → Sentinel → Analytics → Active Rules"
+
