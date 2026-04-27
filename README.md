@@ -1,714 +1,747 @@
-# 🛡️ Sentinel Detection Engine
-### Enterprise Detection-as-Code (DaC) Framework for Microsoft Sentinel
-
-> **What this project does:**
-> Write security detection rules as code, automatically prove they work, and deploy them to Microsoft Sentinel — all without touching the portal manually.
+# Sentinel Detection Engine
+### Enterprise Detection-as-Code (DaC) Framework — Microsoft Sentinel
 
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-v14-red)](https://attack.mitre.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+A GitOps pipeline that manages the full lifecycle of Microsoft Sentinel analytics rules. Detection logic lives in Git — versioned, peer reviewed, red-team validated, and deployed via ARM. The portal is read-only.
+
+> Built by [Mark Mooli](https://github.com/msmooli)
+
 ---
 
-## 🎯 The Problem This Solves
+## The Problem This Solves
 
-Most security teams manage detection rules by clicking around in their SIEM portal. This creates three serious problems:
+Most security teams manage detection rules directly in their SIEM portal. This creates three compounding problems:
 
-| Problem | Real-world impact |
+| Problem | Real-world consequence |
 |---|---|
-| **No audit trail** | Anyone can modify a detection rule silently — no record of who changed what |
+| **No audit trail** | Rules get silently modified — no record of who changed what or why |
 | **No testing** | Rules are deployed and assumed to work. Most teams never verify they actually fire |
-| **No rollback** | A bad rule floods the SOC queue at 2am — and you can't easily undo it |
+| **No rollback** | A noisy rule floods the SOC queue at 2am and there's no clean way to undo it |
 
-**This framework solves all three.** Detection rules live in Git. Every change is peer reviewed. Every rule is automatically tested before deployment. Broken pipelines get caught before they reach production.
+This framework treats detection rules the same way software teams treat application code — version controlled, peer reviewed, automatically tested, and deployed through a pipeline. Every rule is proven to fire before it reaches production. Every change has an author, a diff, and a reviewer.
 
 ---
 
-## ⚙️ How It Works
-
-The full flow from writing a detection rule to it going live in Sentinel:
+## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│   1. You write a detection rule (JSON) + a simulation script (PS1) │
-│                           │                                         │
-│                           ▼                                         │
-│   2. You open a Pull Request on GitHub                              │
-│                           │                                         │
-│                           ▼                                         │
-│   3. A second engineer reviews and approves                         │
-│      (nobody deploys detection rules alone)                         │
-│                           │                                         │
-│                           ▼                                         │
-│   ┌───────────────────────────────────────────────────────────┐    │
-│   │              GitHub Actions — 3 Automated Gates            │    │
-│   │                                                            │    │
-│   │  ✅ GATE 1 — Schema Validation                            │    │
-│   │     Is the JSON correctly formatted?                       │    │
-│   │     Are all required fields present? (MITRE, severity...)  │    │
-│   │                        │                                   │    │
-│   │                        ▼                                   │    │
-│   │  ✅ GATE 2 — Attack Simulation                            │    │
-│   │     simulate_attack.ps1 runs on isolated test VM           │    │
-│   │     Generates real Windows events (4697, 4625)             │    │
-│   │                        │                                   │    │
-│   │                        ▼                                   │    │
-│   │  ✅ GATE 3 — Alert Verification                           │    │
-│   │     Queries Log Analytics to confirm events arrived        │    │
-│   │     Retries every 60s for up to 10 minutes                 │    │
-│   └───────────────────────────────────────────────────────────┘    │
-│                           │  all 3 gates pass                       │
-│                           ▼                                         │
-│   4. Sentinel syncs ARM templates → Detection rule goes live        │
-│                           │                                         │
-│                           ▼                                         │
-│   5. Alert fires in SOC queue when a real attack matches the rule   │
-│                                                                     │
-│   ❌ If ANY gate fails → PR is blocked, nothing deploys             │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  1. Write detection rule (JSON) + simulation function (PowerShell)   │
+│                              │                                        │
+│                              ▼                                        │
+│  2. Open a Pull Request — second engineer reviews and approves        │
+│                              │                                        │
+│                              ▼                                        │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                 GitHub Actions — 3 Gates                        │  │
+│  │                                                                 │  │
+│  │  Gate 1 — Schema Validation                                     │  │
+│  │  Checks JSON structure, required fields, MITRE tags,            │  │
+│  │  severity enum, entity mappings, API version                    │  │
+│  │                         │                                       │  │
+│  │                         ▼                                       │  │
+│  │  Gate 2 — Attack Simulation                                     │  │
+│  │  simulate_attack.ps1 runs on isolated test VM via               │  │
+│  │  Azure Run Command. Cleanup runs regardless of outcome.         │  │
+│  │                         │                                       │  │
+│  │                         ▼                                       │  │
+│  │  Gate 3 — Alert Verification                                    │  │
+│  │  Polls Log Analytics for expected EventIDs.                     │  │
+│  │  Retries every 60s for up to 10 minutes.                        │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                              │  all gates pass                        │
+│                              ▼                                        │
+│  3. Merge to main → Sentinel Content Management syncs ARM templates  │
+│                              │                                        │
+│                              ▼                                        │
+│  4. Detection rule is live — alert fires when a real attack matches  │
+│                                                                       │
+│  ❌ Any gate fails → PR blocked. Nothing deploys.                    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 Sentinel-Detection-Engine/
 │
 ├── .github/
 │   └── workflows/
-│       └── dac-pipeline.yml        ← The CI/CD pipeline (all 3 gates live here)
+│       └── dac-pipeline.yml        ← CI/CD pipeline (all 4 jobs defined here)
 │
-├── Detections/                     ← Production detection rules (ARM/JSON)
-│   ├── rdp-hijacking.json          ← T1563.002 Lateral Movement   [Medium]
-│   ├── new-service-creation.json   ← T1543.003 Persistence        [High]
-│   └── brute-force-success.json    ← T1110    Credential Access   [Critical]
+├── Detections/                     ← Production ARM/JSON analytics rule templates
+│   ├── rdp-hijacking.json          ← T1563.002  Lateral Movement   Medium
+│   ├── new-service-creation.json   ← T1543.003  Persistence        High
+│   └── brute-force-success.json    ← T1110      Credential Access  Critical
 │
-├── Validation/                     ← Attack simulation scripts
-│   └── simulate_attack.ps1         ← Fires T1543.003 + T1110 on test endpoint
+├── Validation/
+│   └── simulate_attack.ps1         ← Red-team simulation script
 │
-├── Templates/                      ← Starting points for new rules
-│   └── detection-skeleton.json     ← Fully commented template — copy this
+├── Templates/
+│   └── detection-skeleton.json     ← Annotated starting point for new rules
 │
-└── README.md                       ← You are here
+└── README.md
 ```
 
-> **The golden rule:** Every file in `/Detections` must have a corresponding simulation in `/Validation`. If you can't simulate it and prove it fires, it doesn't ship.
+**Non-negotiable rule:** Every file added to `/Detections` must have a corresponding simulation function in `Validation/simulate_attack.ps1`. No simulation = no merge.
 
 ---
 
-## 🛠️ Technical Stack
+## Technical Stack
 
-| Component | Technology | Purpose |
-|---|---|---|
-| SIEM / SOAR | Microsoft Sentinel | Runs detection rules, generates alerts |
-| Query language | KQL (Kusto Query Language) | Searches log data for attack patterns |
-| Rule format | ARM / JSON templates | Deploys detection rules as Azure resources |
-| CI/CD | GitHub Actions | Automates validation and deployment |
-| Testing | PowerShell | Simulates real attack techniques |
-| Governance | GitHub pull requests | Enforces peer review and audit trail |
+| Component | Technology |
+|---|---|
+| SIEM / SOAR | Microsoft Sentinel |
+| Query language | KQL (Kusto Query Language) |
+| Rule deployment format | Azure Resource Manager (ARM / JSON) |
+| CI/CD | GitHub Actions |
+| Attack simulation | PowerShell |
 
 ---
 
-## 🗺️ Detection Coverage
+## Detection Coverage
 
-| Rule | MITRE ID | Tactic | Severity | EventID |
+| Rule | MITRE | Tactic | Severity | EventID |
 |---|---|---|---|---|
-| [RDP Hijacking](Detections/rdp-hijacking.json) | T1563.002 | Lateral Movement | 🟡 Medium | 4688 |
-| [New Service Creation](Detections/new-service-creation.json) | T1543.003 | Persistence | 🔴 High | 4697 |
-| [Brute Force](Detections/brute-force-success.json) | T1110 | Credential Access | 🚨 Critical | 4625 |
+| [RDP Hijacking](Detections/rdp-hijacking.json) | T1563.002 | Lateral Movement | Medium | 4688 |
+| [New Service Creation](Detections/new-service-creation.json) | T1543.003 | Persistence | High | 4697 |
+| [Brute Force](Detections/brute-force-success.json) | T1110 | Credential Access | Critical | 4625 |
 
 <details>
-<summary><b>What does each detection catch?</b></summary>
+<summary><strong>Detection logic explained</strong></summary>
 
-### 🟡 RDP Hijacking — T1563.002 — Medium
-An attacker with SYSTEM privileges uses `tscon.exe` to take over another user's active RDP session — without their password. This technique is stealthy because it uses a legitimate Windows tool and leaves no password events in the log. Medium severity because it requires pre-existing elevated access.
+### RDP Hijacking — T1563.002 — Medium
 
-**Triage tip:** When this fires, check what the attacker did immediately after taking the session. Look for subsequent process creation events from the hijacked session context.
+**What the attacker does:** Uses `tscon.exe` — a legitimate Windows Remote Desktop Services utility — to transfer an active RDP session to themselves under SYSTEM context. No credentials required. No password event in the log.
 
----
+**What the rule detects:** EventID 4688 (process creation) where `NewProcessName` ends with `tscon.exe` and the process runs under `SYSTEM` or is spawned by `cmd.exe` / `powershell.exe`. Legitimate enterprise use of `tscon.exe` is rare — watchlist known-good if it exists in your environment.
 
-### 🔴 New Service Creation — T1543.003 — High
-An attacker installs a Windows service pointing at a malicious executable (often disguised with a legitimate-sounding name like `LegitMicrosoftUpdate`). Services survive reboots — this is how attackers ensure their malware restarts even if the machine is rebooted. High severity because persistence means the attacker intends to stay.
+**Why Medium:** Requires pre-existing SYSTEM privileges. The attacker is already deeply inside by the time this fires.
 
-**The tell:** Legitimate Windows services run `svchost.exe`. Any service pointing at `cmd.exe`, `powershell.exe`, or a temp/user directory is suspicious.
-
-**Triage tip:** Check `ServiceFileName` in the alert. Then check who created it (`SubjectUserName`) and what that account was doing in the 15 minutes before.
+**Triage:** What did the attacker do after session transfer? Check process creation events from the hijacked session context in the 10 minutes following the alert timestamp.
 
 ---
 
-### 🚨 Brute Force — T1110 — Critical
-Five or more failed logon attempts (EventID 4625) from the same IP within a 10-minute window. Critical because credential access is the pivot point in most attack chains. If this fires, the first thing to check is whether any of the failures were followed by a successful logon (EventID 4624) from the same source — that means the attacker found a valid password.
+### New Service Creation — T1543.003 — High
 
-**Triage KQL — run this immediately when the alert fires:**
+**What the attacker does:** Registers a Windows service with a suspicious binary path — typically `cmd.exe`, `powershell.exe`, or an executable in a user-writable location — disguised with a legitimate-sounding name. Services survive reboots, giving the attacker persistent execution.
+
+**What the rule detects:** EventID 4697 (service installed on system) where `ServiceFileName` does not match standard `svchost.exe` patterns and points to a known suspicious binary or path. An extended field `SuspiciousPath` is set to `true` when the binary matches a known LOLBin or user-writable directory.
+
+**Why High:** Persistence means the attacker intends to maintain access. This is not opportunistic — it's deliberate.
+
+**Triage:** Check `ServiceFileName` (where does the binary live?), `SubjectUserName` (is this a known service account?), and what that account did in the 15 minutes prior to service creation.
+
+---
+
+### Brute Force — T1110 — Critical
+
+**What the attacker does:** Submits repeated failed authentication attempts against one or more accounts, attempting to guess valid credentials. The query aggregates EventID 4625 failures by source IP over a 10-minute tumbling window. When the count hits 5 or more, the alert fires.
+
+**What the rule detects:** Five or more EventID 4625 failures from the same source IP within a 10-minute window. Loopback, link-local addresses, and machine accounts are excluded to reduce noise.
+
+**Why Critical:** Credential access is the pivot point for most attack chains. If an attacker successfully authenticates after a brute force run, everything downstream — lateral movement, data access, persistence — becomes possible.
+
+**Triage — run this immediately:**
 ```kql
-let AttackingIP = "PASTE_IP_FROM_ALERT_HERE";
+let AttackingIP = "PASTE_IP_FROM_ALERT";
 SecurityEvent
 | where TimeGenerated > ago(30m)
 | where EventID in (4625, 4624)
 | where IpAddress == AttackingIP
-| project TimeGenerated, EventID, TargetUserName, IpAddress,
-          LogonType, AuthenticationPackageName
+| project TimeGenerated, EventID, TargetUserName, IpAddress, LogonType
 | order by TimeGenerated asc
-// A 4624 after a run of 4625s = successful brute force → escalate immediately
+// A 4624 following a run of 4625s = credential compromise — escalate immediately
 ```
 
 </details>
 
 ---
 
-## ✅ Prerequisites
-
-Work through this checklist before starting setup. Everything must be checked before you proceed.
+## Prerequisites
 
 ### Azure
-- [ ] Azure subscription (free trial works — see [No Azure Access?](#-no-azure-access-practice-here))
-- [ ] Microsoft Sentinel workspace deployed
-- [ ] Log Analytics workspace connected to Sentinel
-- [ ] Azure CLI installed: `az --version` should return a version number
-  - Install: https://docs.microsoft.com/cli/azure/install-azure-cli
+- [ ] Subscription with an active Microsoft Sentinel workspace
+- [ ] Service principal with two roles on the workspace resource group:
+  - `Microsoft Sentinel Contributor` — rule deployment
+  - `Log Analytics Reader` — Gate 3 event verification
+- [ ] Azure CLI installed and authenticated (`az --version`)
 
-### Test endpoint (read carefully — this is the most important prerequisite)
-- [ ] A **dedicated Windows VM** for running attack simulations
-- [ ] This VM must be **completely isolated** — no connection to production networks or corporate domains
-- [ ] Azure Monitor Agent (AMA) installed on the test VM and forwarding to your Log Analytics workspace
-- [ ] Windows Security event collection configured (EventIDs 4625, 4697, and 4688 must forward)
+### Test endpoint
+- [ ] Isolated Windows VM dedicated to simulations — no production network path, not domain-joined
+- [ ] Azure Monitor Agent (AMA) installed and forwarding to your Log Analytics workspace
+- [ ] `Security` event log configured in the Data Collection Rule (EventIDs 4625, 4688, 4697)
+- [ ] `DAC_TEST_ENDPOINT` environment variable set to `"true"` (see [Setup Step 4](#step-4--configure-the-test-endpoint))
+- [ ] Process creation auditing enabled — required for RDP Hijacking detection (EventID 4688):
 
-> ⛔ **Critical:** Never run `simulate_attack.ps1` on a production machine, a domain-joined corporate machine, or any machine you care about. The script has a safety guard that will block it, but the isolation requirement is your first line of defence.
+  ```
+  GPO: Computer Configuration → Windows Settings → Security Settings
+       → Advanced Audit Policy → Detailed Tracking
+       → Audit Process Creation: Success
+
+  GPO: Administrative Templates → System → Audit Process Creation
+       → Include command line in process creation events: Enabled
+  ```
 
 ### GitHub
-- [ ] GitHub account with access to this repository
-- [ ] Git installed: `git --version` should return a version number
-- [ ] Basic Git knowledge: branch, commit, push, pull request
+- [ ] Actions enabled on the repository
+- [ ] Admin access to configure branch protection
 
-### Local machine
-- [ ] PowerShell 7+: `pwsh --version`
-- [ ] Code editor (VS Code recommended: https://code.visualstudio.com)
+### Local
+- [ ] PowerShell 7+ (`pwsh --version`)
+- [ ] `jq` for local JSON validation (`jq --version`)
 
 ---
 
-## 🚀 Setup Guide
+## Setup
 
-### Step 1 — Fork and clone the repository
+### Step 1 — Fork and clone
 
 ```bash
-# Fork the repository on GitHub first (click Fork button top-right)
-# Then clone YOUR fork:
+# Fork on GitHub (top-right), then clone your fork
 git clone https://github.com/YOUR-USERNAME/Sentinel-Detection-Engine.git
 cd Sentinel-Detection-Engine
 ```
 
 ---
 
-### Step 2 — Create an Azure service principal
-
-A service principal is a dedicated account that GitHub Actions uses to authenticate to Azure. Think of it as a robot account with only the permissions it needs.
+### Step 2 — Create a service principal
 
 ```bash
-# Log in to Azure
 az login
+az account show --query id -o tsv  # get your subscription ID
 
-# Find your subscription ID
-az account show --query id -o tsv
-
-# Create the service principal
-# Replace YOUR_SUBSCRIPTION_ID and YOUR_RESOURCE_GROUP with your actual values
 az ad sp create-for-rbac \
   --name "sentinel-dac-pipeline" \
   --role "Microsoft Sentinel Contributor" \
   --scopes "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP" \
   --sdk-auth
+
+# Assign Log Analytics Reader separately (required for Gate 3)
+az role assignment create \
+  --assignee YOUR_CLIENT_ID \
+  --role "Log Analytics Reader" \
+  --scope "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP"
 ```
 
-The output looks like this — **copy it, you need it in the next step:**
-
-```json
-{
-  "clientId":       "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "clientSecret":   "your-secret-value-here",
-  "subscriptionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "tenantId":       "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-}
-```
-
-> ⚠️ This is the only time you'll see the `clientSecret`. Save it now.
+The `--sdk-auth` output contains all four credential values you need. **Save this output — the `clientSecret` is shown only once.**
 
 ---
 
-### Step 3 — Add secrets to GitHub
+### Step 3 — Add GitHub Secrets
 
-In your repository on GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → New repository secret**
 
-Add each of the following secrets:
-
-| Secret name | Where to get it |
+| Secret | Where to get it |
 |---|---|
-| `AZURE_CLIENT_ID` | `clientId` from Step 2 output |
-| `AZURE_CLIENT_SECRET` | `clientSecret` from Step 2 output |
-| `AZURE_TENANT_ID` | `tenantId` from Step 2 output |
-| `AZURE_SUBSCRIPTION_ID` | `subscriptionId` from Step 2 output |
-| `LAW_WORKSPACE_ID` | Azure Portal → Log Analytics workspace → Overview → **Workspace ID** |
-| `TEST_ENDPOINT_NAME` | The name of your isolated test VM |
-| `TEST_RESOURCE_GROUP` | The resource group containing your test VM |
-| `SENTINEL_RESOURCE_GROUP` | The resource group containing your Sentinel workspace |
-| `SENTINEL_WORKSPACE_NAME` | Your Sentinel workspace name |
-| `SENTINEL_SOURCECONTROL_ID` | See Step 4 below |
-
-> **Why secrets?** Putting credentials directly in code files is a serious security risk — anyone with repo access can read them. GitHub Secrets encrypts these values and only exposes them to the pipeline during a run. They never appear in logs.
+| `AZURE_CLIENT_ID` | `clientId` from service principal output |
+| `AZURE_CLIENT_SECRET` | `clientSecret` from service principal output |
+| `AZURE_TENANT_ID` | `tenantId` from service principal output |
+| `AZURE_SUBSCRIPTION_ID` | `subscriptionId` from service principal output |
+| `LAW_WORKSPACE_ID` | Sentinel → Log Analytics → Overview → Workspace ID |
+| `TEST_ENDPOINT_NAME` | Name of your isolated test VM |
+| `TEST_RESOURCE_GROUP` | Resource group containing the test VM |
+| `SENTINEL_RESOURCE_GROUP` | Resource group containing the Sentinel workspace |
+| `SENTINEL_WORKSPACE_NAME` | Sentinel workspace name |
+| `SENTINEL_SOURCECONTROL_ID` | From the repository connection URL (see Step 5) |
 
 ---
 
-### Step 4 — Connect Sentinel to this repository
+### Step 4 — Configure the test endpoint
 
-1. In the Azure Portal, go to **Microsoft Sentinel** → your workspace
-2. Click **Content management** → **Repositories**
-3. Click **+ Add**
-4. Authenticate with GitHub when prompted
-5. Select your forked repository
-6. Set branch to `main`
-7. Set content path to `/Detections`
-8. Click **Save**
-
-After saving, find the connection ID:
-- In the Repositories list, click your connection
-- The URL in your browser contains the source control ID:
-  `...sourcecontrols/THIS-IS-YOUR-ID/...`
-- Copy this ID and add it as the `SENTINEL_SOURCECONTROL_ID` secret
-
----
-
-### Step 5 — Set the environment guard on your test VM
-
-This is a one-time step on your isolated test VM. It's what allows the simulation script to run there (and only there).
+On the isolated test VM, open PowerShell as Administrator:
 
 ```powershell
-# Run this in PowerShell as Administrator on the test VM
-# This sets the variable permanently so it persists across reboots
+# Sets the environment guard permanently — survives reboots
 [System.Environment]::SetEnvironmentVariable("DAC_TEST_ENDPOINT", "true", "Machine")
 ```
+
+The simulation script checks for this variable at startup and exits immediately if it is not set. This prevents the script from running on any machine that hasn't been explicitly designated as a test endpoint.
+
+---
+
+### Step 5 — Connect Sentinel to this repository
+
+1. Azure Portal → **Microsoft Sentinel** → your workspace
+2. **Content management** → **Repositories** → **+ Add**
+3. Authenticate GitHub, select this repository, set branch to `main`, path to `/Detections`
+4. Save — then click the connection in the list
+5. Copy the source control ID from the browser URL: `...sourcecontrols/THIS-ID/...`
+6. Add this as the `SENTINEL_SOURCECONTROL_ID` secret
 
 ---
 
 ### Step 6 — Enable branch protection
 
-This is the governance control that makes the framework actually enforceable.
-
-In GitHub: **Settings → Branches → Add branch protection rule**
+**Settings → Branches → Add branch protection rule**
 
 - Branch name pattern: `main`
 - ✅ Require a pull request before merging
-- ✅ Require approvals → set to `1`
-- ✅ Require status checks to pass before merging
-  - Add: `Gate 1 — Schema Validation`
-  - Add: `Gate 2 — Attack Simulation`
-  - Add: `Gate 3 — Alert Verification`
+- ✅ Require approvals: `1`
+- ✅ Require status checks to pass:
+  - `Gate 1 — Schema Validation`
+  - `Gate 2 — Attack Simulation`
+  - `Gate 3 — Alert Verification`
 - ✅ Do not allow bypassing the above settings
 
-Click **Save changes**.
-
-> Without this step, anyone with write access can push directly to `main` and skip every gate. This is the control that makes the audit trail meaningful.
+Without this, every gate is advisory. Anyone with write access can push to `main` and skip the pipeline entirely.
 
 ---
 
-### Step 7 — Verify everything works
+### Step 7 — Smoke test
 
-Push a small change (like a whitespace edit to this README) to a branch and open a pull request. You should see all three gates appear and run in the **Checks** tab of the PR.
-
-✅ Three green checkmarks = your pipeline is working end-to-end.
+Push a whitespace edit on a branch and open a PR. Confirm all three gates appear and run green in the **Checks** tab before proceeding.
 
 ---
 
-## ✍️ Writing a New Detection Rule
+## Authoring a Detection Rule
 
-### Step 1 — Start from the skeleton
+### 1 — Write and validate KQL first
+
+Open **Microsoft Sentinel → Logs** and develop your query against real data. Do not touch the ARM template until the query returns what you expect. Note the exact output column names — they must match your entity mappings exactly.
+
+### 2 — Copy the skeleton
 
 ```bash
-cp Templates/detection-skeleton.json Detections/your-detection-name.json
+cp Templates/detection-skeleton.json Detections/your-rule-name.json
 ```
 
-### Step 2 — Test your KQL in Sentinel Logs first
+### 3 — Fill required fields
 
-**Do not write the ARM template until your KQL query works.** In Microsoft Sentinel:
+Every field marked `REPLACE` must be updated. Gate 1 will fail on any missing or invalid value.
 
-1. Click **Logs** in the left menu
-2. Paste your query and click **Run**
-3. Confirm it returns results
-4. Note the exact column names — you'll need them for entity mappings
+| Field | Allowed values |
+|---|---|
+| `severity` | `Informational` `Low` `Medium` `High` `Critical` |
+| `status` | `Observation` `Active` `Deprecated` — **always start new rules as `Observation`** |
+| `tactics` | MITRE ATT&CK tactic name e.g. `Persistence` |
+| `techniques` | MITRE technique ID e.g. `T1543.003` |
+| `entityMappings` | At least one entity; `columnName` must match query output |
+| `apiVersion` | `2022-11-01-preview` — older versions will fail Gate 1 |
 
-### Step 3 — Fill in the skeleton
+### 4 — Escape KQL for JSON
 
-Open your new file and replace every `REPLACE` value. The skeleton has a comment (`INSTRUCTION_*`) next to every field explaining what goes there.
+When pasting KQL into the `query` field:
 
-**JSON syntax notes for KQL queries:**
-- Newlines become `\n`
-- Single backslash `\` becomes `\\`
-- Double backslash `\\` becomes `\\\\`
+| In KQL | In JSON string |
+|---|---|
+| newline | `\n` |
+| `\` | `\\` |
+| `\\` | `\\\\` |
+| `"` inside query | use `'` single quotes |
 
-Example — this KQL:
-```kql
-SecurityEvent
-| where EventID == 4697
-| where ServiceFileName !startswith "C:\Windows"
-```
-
-Becomes this in JSON:
-```json
-"query": "SecurityEvent\n| where EventID == 4697\n| where ServiceFileName !startswith 'C:\\\\Windows'"
-```
-
-> Note: single quotes are used inside the JSON string to avoid conflicting with the outer double quotes.
-
-### Step 4 — Validate JSON syntax locally
+### 5 — Validate locally before pushing
 
 ```bash
-# Catch syntax errors before pushing
-cat Detections/your-detection.json | jq .
-# If it prints formatted JSON: good. If it prints an error: fix it first.
+cat Detections/your-rule.json | jq .
+# Formatted JSON output = valid. Error = fix before pushing.
 ```
 
-### Step 5 — Add a simulation for your detection
+### 6 — Add a simulation function
 
-Add a function to `Validation/simulate_attack.ps1` that generates the events your detection looks for. Use the existing functions as examples.
+Add a corresponding simulation function to `Validation/simulate_attack.ps1` following the same pattern as `Invoke-ServiceCreationSim` and `Invoke-BruteForceSim`. The function must generate the specific Windows EventID your detection rule queries for.
 
 ---
 
-## 🔬 Running the Validation Script
+## Running the Validation Script
 
-> **Read every word of this section before running anything.**
+### Confirm before every run
 
-### The checklist
+- [ ] You are on the **isolated test VM** — not a production or corporate machine
+- [ ] `$env:DAC_TEST_ENDPOINT` equals `"true"`
+- [ ] PowerShell is running as **Administrator**
+- [ ] You will run `-Cleanup` when done
 
-Confirm all of these before executing the script. If any item is false, stop.
-
-- [ ] I am on the **isolated test VM** — not a production or corporate machine
-- [ ] The test VM has `DAC_TEST_ENDPOINT=true` set as a system environment variable
-- [ ] I am running PowerShell **as Administrator**
-- [ ] I understand the script creates a Windows service that persists until cleanup is run
-
-### Running the script
+### Commands
 
 ```powershell
-# On the isolated test VM, open PowerShell as Administrator
+# Confirm environment guard
+echo $env:DAC_TEST_ENDPOINT   # must output: true
 
-# Confirm the environment guard is set
-echo $env:DAC_TEST_ENDPOINT
-# Should output: true
-# If it's blank, run: $env:DAC_TEST_ENDPOINT = "true"
-
-# Run the full simulation
+# Full simulation (both T1543.003 and T1110)
 .\Validation\simulate_attack.ps1
 
-# Wait 2-5 minutes, then verify in Sentinel → Logs:
-# SecurityEvent
-# | where EventID in (4697, 4625)
-# | where TimeGenerated > ago(15m)
-# | project TimeGenerated, EventID, Computer, SubjectUserName, ServiceName
-# | order by TimeGenerated desc
+# Service creation only
+.\Validation\simulate_attack.ps1 -SkipBruteForce
 
-# ALWAYS run cleanup when done
+# Remove all artifacts after testing — always do this
 .\Validation\simulate_attack.ps1 -Cleanup
 ```
 
-### What the script does, step by step
+### What each simulation does
 
-**Simulation 1 — T1543.003 (New Service Creation):**
-Creates a Windows service named `LegitMicrosoftUpdate` pointing at `cmd.exe`. This generates EventID 4697 in the Windows Security log. The AMA agent forwards it to Log Analytics. The `New Service Creation` detection rule matches it and fires an alert in Sentinel.
+**Simulation 1 — T1543.003 (New Service Creation)**
+Calls `New-Service` with binary path `C:\Windows\System32\cmd.exe` under the name `LegitMicrosoftUpdate`. Writes EventID 4697 to the Windows Security log. The AMA agent forwards this to Log Analytics where the `New Service Creation` analytics rule matches it.
 
-**Simulation 2 — T1110 (Brute Force):**
-Makes 6 failed authentication attempts against a fake account (`FakeAdmin_DACTest`). Each generates EventID 4625. When 5+ failures appear from the same source within 10 minutes, the `Brute Force` detection rule fires.
+**Simulation 2 — T1110 (Brute Force)**
+Fires 6 sequential `net use` attempts against `FakeAdmin_DACTest` with wrong passwords, with a 2-second delay between each to generate distinct timestamps. Each attempt writes EventID 4625. When 5+ failures from the same IP appear within the 10-minute tumbling window, the `Brute Force` rule fires.
 
-**Cleanup:**
-The `-Cleanup` flag removes the `LegitMicrosoftUpdate` service. The CI pipeline runs cleanup automatically via an `if: always()` step — meaning cleanup happens even if the simulation fails.
+**Cleanup**
+The `-Cleanup` flag stops and deletes the `LegitMicrosoftUpdate` service. The CI pipeline runs cleanup automatically in an `if: always()` step — artifacts are removed whether the simulation succeeded or failed.
+
+### Verify events reached Sentinel
+
+Wait 2–5 minutes after running, then run in **Sentinel → Logs**:
+
+```kql
+SecurityEvent
+| where EventID in (4697, 4625)
+| where TimeGenerated > ago(15m)
+| project TimeGenerated, EventID, Computer, SubjectUserName, ServiceName
+| order by TimeGenerated desc
+```
+
+Expected: 1× EventID 4697, 6× EventID 4625. If either is missing, check AMA agent health before assuming a detection rule problem.
 
 ---
 
-## 📬 Submitting a Pull Request
-
-### Step 1 — Create a branch
+## Submitting a Pull Request
 
 ```bash
-git checkout main
-git pull origin main
-
-# Branch name format: detection/technique-description
+# Branch naming convention
 git checkout -b detection/t1543-new-service-creation
-```
 
-### Step 2 — Commit your files
-
-```bash
-git add Detections/your-detection.json
+# Stage only your detection and simulation files
+git add Detections/your-rule.json
 git add Validation/simulate_attack.ps1
 
+# Commit with context
 git commit -m "Add T1543.003 New Service Creation detection
 
-- KQL filters EventID 4697 for non-standard binary paths
-- Entity mapping: Host (Computer), Account (SubjectUserName)
+- KQL: EventID 4697 filtered for non-svchost binary paths
+- Entity mapping: Host (Computer), Account (SubjectUserName, SubjectDomainName)
 - Simulation verified on isolated test endpoint
-- Cleanup tested and confirmed working
+- EventID 4697 confirmed in Log Analytics
+- Cleanup confirmed working
 - MITRE: Persistence > T1543.003"
 
 git push origin detection/t1543-new-service-creation
 ```
 
-### Step 3 — Open the pull request
-
-On GitHub, click the **Compare & pull request** button. Use this template for the description:
+### PR description template
 
 ```markdown
 ## What this detection catches
-[One paragraph: what attack technique, what the attacker is trying to do, why it matters]
+One paragraph: technique, attacker objective, why it matters.
 
 ## MITRE mapping
-- Tactic: [e.g. Persistence]
-- Technique: [e.g. T1543.003 — Create or Modify System Process: Windows Service]
+- Tactic: Persistence
+- Technique: T1543.003 — Create or Modify System Process: Windows Service
 
-## Testing evidence
-- [ ] KQL tested in Sentinel Logs — returns expected results
+## Test evidence
+- [ ] KQL validated in Sentinel Logs — returns expected results
 - [ ] simulate_attack.ps1 run on isolated test endpoint
-- [ ] EventID [INSERT ID] confirmed in Log Analytics within 5 minutes
-- [ ] Cleanup (-Cleanup) run and confirmed working
+- [ ] EventID confirmed in Log Analytics within 5 minutes
+- [ ] -Cleanup run and confirmed
 
-## False positive considerations
-[What legitimate activity might trigger this rule? How does the KQL handle it?]
+## False positive analysis
+What legitimate activity could trigger this rule and how is it handled?
 
 ## Severity justification
-[Why did you choose this severity level?]
+Why this severity level for this signal?
 ```
 
-### Step 4 — Monitor the CI gates
-
-Click the **Checks** tab in the PR. All three gates run automatically. If a gate fails, click into it — the log output tells you exactly what went wrong. Fix the issue, push a new commit, and the gates re-run.
+After opening the PR, monitor the **Checks** tab. All three gates run automatically. Gate failures include specific error messages — fix the issue, push a new commit, and the gates re-run.
 
 ---
 
-## 🔒 Understanding the CI Gates
+## CI Gate Reference
 
 ### Gate 1 — Schema Validation
 
-**What it checks:** Every field required by the Sentinel ARM schema is present and has a valid value.
+Runs `jq` against every `.json` file in `/Detections`. Checks:
+- Valid JSON syntax
+- All required fields present and non-null
+- `severity` is in the allowed set
+- `status` is in the allowed set
+- `tactics` is a JSON array
+- `entityMappings` contains at least one entry
+- `apiVersion` is not an outdated value (`2020-01-01` and `2019-01-01-preview` are blocked)
 
-| Field | Allowed values |
-|---|---|
-| `severity` | `Informational`, `Low`, `Medium`, `High`, `Critical` |
-| `status` | `Observation`, `Active`, `Deprecated` |
-| `tactics` | Valid MITRE ATT&CK tactic names |
-| `techniques` | Valid MITRE technique IDs |
-| `entityMappings` | At least one entity with valid type |
-
-**Most common failure:** Column name in `entityMappings` doesn't match what the KQL query actually outputs. Test your query in Sentinel Logs first and check column names carefully.
+**Most common failure:** `columnName` in `entityMappings` doesn't match what the query actually returns. Run your query in Sentinel Logs and check the output column names before writing the mapping.
 
 ---
 
 ### Gate 2 — Attack Simulation
 
-**What it checks:** `simulate_attack.ps1` executes on the CI test endpoint without errors. The script must exit with code 0. Cleanup runs automatically afterward regardless of outcome.
+Executes `simulate_attack.ps1` on the CI test endpoint via `az vm run-command invoke`. The VM is started at the beginning of the job in case it has an auto-shutdown schedule. Cleanup runs in an `if: always()` step — artifacts are removed regardless of simulation outcome.
 
-**Most common failure:** PowerShell syntax error in the simulation script. Test locally on your isolated VM first.
+**Most common failure:** PowerShell syntax error in the script. Test locally on the isolated VM before pushing.
 
 ---
 
 ### Gate 3 — Alert Verification
 
-**What it checks:** Queries Log Analytics for EventID 4697 and 4625 after the simulation. Retries every 60 seconds for up to 10 minutes to account for ingestion latency.
+Polls Log Analytics for EventID 4697 (service name `LegitMicrosoftUpdate`) and EventID 4625 (target user `FakeAdmin_DACTest`). Retries up to 10 times at 60-second intervals. Queries are scoped to `TimeGenerated > ago(15m)` to avoid matching events from previous pipeline runs.
 
-**Most common failure:** AMA agent on the test endpoint is not forwarding events. Verify with:
-
-```kql
-Heartbeat
-| where Computer == "YOUR_TEST_VM_NAME"
-| where TimeGenerated > ago(1h)
-| order by TimeGenerated desc
-```
-
-If the heartbeat isn't showing up, the agent needs attention — not the detection rule.
+**Consistent failure with events visible in Sentinel:**
+1. Verify `LAW_WORKSPACE_ID` matches the workspace your test VM forwards to
+2. Confirm service principal has `Log Analytics Reader` role (separate from `Sentinel Contributor`)
+3. Check the `log-analytics` CLI extension is installed — the pipeline installs it automatically
 
 ---
 
-## 🆓 No Azure Access? Practice Here
+## Detection Lifecycle
 
-You don't need Azure access to learn the core skills in this framework. Here are three free options ranked from easiest to most complete.
-
-### Option 1 — Practice KQL right now (no account needed)
-
-Microsoft provides a free demo Sentinel environment pre-loaded with real security data. No account, no credit card, no installation required.
+New rules always start in `Observation` mode. No incidents are created until the rule is promoted to `Active`.
 
 ```
-Go to: https://aka.ms/lademo
+┌─────────────┐   7-day minimum    ┌──────────────┐   documented reason  ┌────────────┐
+│ Observation │ ─────────────────▶ │    Active    │ ───────────────────▶ │ Deprecated │
+│             │   FP rate < 10%    │              │                      │            │
+│ alerts only │   PR + review      │ incidents on │   90-day retention   │ disabled   │
+└─────────────┘                    └──────────────┘   then deleted       └────────────┘
 ```
 
-Practice the exact queries used in this framework:
+**Observation → Active checklist:**
+- [ ] Rule ran for at least 7 calendar days
+- [ ] False positive rate documented (target: fewer than 1 in 10 alerts requires no action)
+- [ ] Triage guidance written or linked in the `description` field
+- [ ] Entity mappings verified — investigation graph populates correctly in Sentinel
+- [ ] `"createIncident": true` set in the ARM template
+- [ ] PR opened, reviewed, and merged
+
+**Deprecation:** Keep deprecated rules at `status: Deprecated` for 90 days before deletion. The history and rationale stay in the Git log regardless.
+
+---
+
+## Operational Runbook
+
+### Triage — New Service Creation (T1543.003)
 
 ```kql
--- Find failed logons (T1110)
+// 1. Full service context
+SecurityEvent
+| where EventID == 4697
+| where Computer == "HOSTNAME_FROM_ALERT"
+| where TimeGenerated > ago(1h)
+| project TimeGenerated, Computer, ServiceName, ServiceFileName,
+          SubjectUserName, SubjectDomainName, SubjectLogonId
+
+// 2. What was this account doing before the service was created?
+SecurityEvent
+| where SubjectLogonId == "LOGON_ID_FROM_ABOVE"
+| where TimeGenerated between (ago(30m) .. now())
+| project TimeGenerated, EventID, Activity, Computer
+| order by TimeGenerated asc
+
+// 3. Did the service binary execute after installation?
+SecurityEvent
+| where EventID == 4688
+| where Computer == "HOSTNAME_FROM_ALERT"
+| where NewProcessName == "SERVICE_FILENAME_FROM_ABOVE"
+| where TimeGenerated > ago(1h)
+| project TimeGenerated, NewProcessName, CommandLine, ParentProcessName
+```
+
+---
+
+### Triage — Brute Force (T1110)
+
+```kql
+// 1. Did any failure lead to a successful logon? (critical question)
+let AttackingIP = "SOURCE_IP_FROM_ALERT";
+SecurityEvent
+| where TimeGenerated > ago(30m)
+| where IpAddress == AttackingIP
+| where EventID in (4625, 4624)
+| project TimeGenerated, EventID, TargetUserName, IpAddress, LogonType
+| order by TimeGenerated asc
+// 4624 after 4625 run = confirmed compromise — P1 escalation
+
+// 2. How many accounts were targeted? (spray vs targeted)
+SecurityEvent
+| where EventID == 4625
+| where IpAddress == AttackingIP
+| where TimeGenerated > ago(30m)
+| summarize Attempts = count() by TargetUserName
+| order by Attempts desc
+```
+
+---
+
+### Rolling back a bad rule
+
+```bash
+# Find the offending commit
+git log --oneline Detections/rule-name.json
+
+# Revert it
+git revert <commit-hash>
+
+# Or reset the specific file to a known-good state
+git checkout <good-commit-hash> -- Detections/rule-name.json
+git commit -m "revert: roll back rule-name — reason: <high FP rate / bad query>"
+
+git push origin hotfix/revert-rule-name
+# Open PR — on merge, Sentinel syncs the reverted template in ~2-3 minutes
+```
+
+---
+
+### Detecting portal bypasses
+
+Add this query to a Sentinel Workbook to catch anyone modifying rules directly in the portal instead of through the pipeline:
+
+```kql
+AzureActivity
+| where OperationNameValue == "MICROSOFT.SECURITYINSIGHTS/ALERTRULES/WRITE"
+| where Caller !startswith "sentinel-dac-pipeline"
+| where TimeGenerated > ago(24h)
+| project TimeGenerated, Caller, ResourceGroup, Properties
+| order by TimeGenerated desc
+```
+
+---
+
+## No Azure Access?
+
+You don't need Azure access to learn the core skills in this framework.
+
+**Practice KQL right now — no account required:**
+Microsoft's Log Analytics demo environment is pre-loaded with real security data.
+→ [https://aka.ms/lademo](https://aka.ms/lademo)
+
+```kql
+-- Brute force pattern (T1110)
 SecurityEvent
 | where EventID == 4625
 | where TimeGenerated > ago(24h)
-| summarize FailureCount = count() by Account, IpAddress
+| summarize FailureCount = count() by IpAddress, TargetUserName
 | where FailureCount > 5
 | order by FailureCount desc
-```
 
-```kql
--- Find service installations (T1543.003)
+-- Service creation (T1543.003)
 SecurityEvent
 | where EventID == 4697
 | project TimeGenerated, Computer, ServiceName, ServiceFileName, SubjectUserName
 | order by TimeGenerated desc
 ```
 
----
+**Free Azure trial — full pipeline practice:**
+90 days + $200 credit. Enough to run this framework end-to-end.
+→ [https://azure.microsoft.com/free](https://azure.microsoft.com/free)
 
-### Option 2 — Free Azure trial (recommended for full pipeline practice)
+Deploy a pre-configured Sentinel workspace in 20 minutes:
+→ [Sentinel Training Lab](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Training/Azure-Sentinel-Training-Lab)
 
-Microsoft gives you **90 days + $200 in credits** with a new Azure account. Enough to run this entire framework end-to-end.
-
-```
-Go to: https://azure.microsoft.com/free
-Requirements: Microsoft account + credit card for identity verification only
-```
-
-Once you have the trial account, deploy the free Sentinel Training Lab:
-
-```
-Go to: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Training/Azure-Sentinel-Training-Lab
-```
-
-This gives you a fully configured Sentinel workspace with sample data in about 20 minutes.
+**Free Windows test VM — local simulation practice:**
+Microsoft's Windows 11 dev VM runs in VirtualBox (free). Fully isolated on your laptop.
+→ [https://developer.microsoft.com/windows/downloads/virtual-machines](https://developer.microsoft.com/windows/downloads/virtual-machines)
 
 ---
 
-### Option 3 — Free Windows test VM (for simulation practice)
-
-Microsoft distributes free Windows 11 developer VMs specifically for this kind of practice. Run locally in VirtualBox (free).
-
-```
-Go to: https://developer.microsoft.com/windows/downloads/virtual-machines
-```
-
-This gives you a legitimate isolated Windows machine to run `simulate_attack.ps1` against — completely on your laptop, no network exposure, no Azure account needed.
-
----
-
-## 🔧 Troubleshooting
+## Troubleshooting
 
 <details>
-<summary><b>My KQL works in Sentinel Logs but Gate 1 fails saying the query is invalid</b></summary>
+<summary><strong>Gate 1 fails — "Invalid apiVersion"</strong></summary>
 
-JSON requires special characters to be escaped. Inside a JSON string:
-- Newlines → `\n`
-- Single backslash `\` → `\\`
-- Double backslash `\\` → `\\\\`
+Your ARM template is using an outdated API version (`2020-01-01` or `2019-01-01-preview`). Gate 1 explicitly blocks these because they do not support `entityMappings` or `alertDetailsOverride`.
 
-Your KQL:
-```
-SecurityEvent
-| where ServiceFileName !startswith "C:\Windows"
-```
-
-In JSON (use single quotes inside to avoid escaping double quotes):
-```json
-"query": "SecurityEvent\n| where ServiceFileName !startswith 'C:\\\\Windows'"
-```
+Fix: change `apiVersion` to `2022-11-01-preview` in your detection JSON.
 
 </details>
 
 <details>
-<summary><b>Gate 3 fails with "EventID not found" but I can see the events in Sentinel</b></summary>
+<summary><strong>Gate 1 fails — "Missing required field: entityMappings"</strong></summary>
 
-The pipeline is querying a different Log Analytics workspace than your test endpoint is forwarding to. Check that `LAW_WORKSPACE_ID` in GitHub Secrets matches the Workspace ID of the workspace receiving your test VM's events.
+Every detection template must include at least one entity mapping. Without this, the Sentinel investigation graph is empty and analysts cannot pivot on any alert entity.
+
+Check that `entityMappings` is present, is a JSON array, and has at least one entry with a `columnName` that matches your query output. Run your KQL in Sentinel Logs first and inspect the returned columns.
+
+</details>
+
+<details>
+<summary><strong>Gate 1 fails — "Invalid JSON syntax"</strong></summary>
+
+Run locally to find the exact line:
+```bash
+cat Detections/your-file.json | jq .
+```
+
+Most common cause: unescaped backslashes in the KQL query string. In JSON, `\` must be `\\` and `\\` must be `\\\\`.
+
+</details>
+
+<details>
+<summary><strong>Gate 2 fails — simulation script errors</strong></summary>
+
+Test the script locally on the isolated VM first:
+```powershell
+$env:DAC_TEST_ENDPOINT = "true"
+.\Validation\simulate_attack.ps1
+```
+
+If it runs locally but fails in CI, compare PowerShell versions between your VM and the CI runner.
+
+</details>
+
+<details>
+<summary><strong>Gate 3 fails — "EventID not found" but events are visible in Sentinel</strong></summary>
+
+The pipeline is querying a different workspace than your test VM is forwarding to.
 
 Verify which workspace has the events:
 ```kql
 SecurityEvent
-| where TimeGenerated > ago(30m)
 | where Computer == "YOUR_TEST_VM_NAME"
+| where TimeGenerated > ago(30m)
 | summarize count() by EventID
 ```
-Run this in each workspace you have. The one that returns results is the correct one.
+
+Run this in each workspace you have access to. Update `LAW_WORKSPACE_ID` in GitHub Secrets to match the workspace that returns results.
 
 </details>
 
 <details>
-<summary><b>The simulation script says "SAFETY BLOCK" and won't run</b></summary>
+<summary><strong>Simulation script prints "SAFETY BLOCK" and exits</strong></summary>
 
-The environment guard is working correctly — this is the right behaviour on non-test machines.
+The environment guard is working correctly. The variable is not set on this machine.
 
-On your isolated test VM:
+On the designated test VM only:
 ```powershell
-# For the current session only:
+# Session only
 $env:DAC_TEST_ENDPOINT = "true"
 
-# Or permanently (requires admin, survives reboots):
+# Permanent (survives reboots — requires Administrator)
 [System.Environment]::SetEnvironmentVariable("DAC_TEST_ENDPOINT", "true", "Machine")
 ```
 
-If you are not on the designated test VM, do not attempt to bypass this check.
+Do not bypass this check on any machine other than the isolated test VM.
 
 </details>
 
 <details>
-<summary><b>I merged a PR but the rule isn't showing in Sentinel Analytics</b></summary>
+<summary><strong>Rule merged but not appearing in Sentinel Analytics</strong></summary>
 
-1. Go to Sentinel → **Content management** → **Repositories**
-2. Click your repository connection
-3. Look for any error messages in the sync log
-4. Common causes:
-   - ARM template file is in a subdirectory (must be directly in `/Detections/`)
-   - JSON is malformed: `cat Detections/yourfile.json | jq .`
-   - Service principal doesn't have sufficient permissions
-
-</details>
-
-<details>
-<summary><b>I accidentally ran the simulation on the wrong machine</b></summary>
-
-1. Don't panic.
-2. Immediately run cleanup: `.\Validation\simulate_attack.ps1 -Cleanup`
-3. Confirm the service is gone: `Get-Service -Name "LegitMicrosoftUpdate"`
-4. Check the Security event log for unexpected activity alongside the simulation events
-5. Notify your team lead — they need to know so no alerts are miscorrelated
+1. Sentinel → **Content management** → **Repositories** → check sync log for errors
+2. Confirm the JSON file is directly in `/Detections/` — not in a subdirectory
+3. Validate JSON: `cat Detections/yourfile.json | jq .`
+4. Verify service principal has `Microsoft Sentinel Contributor` on the correct resource group
+5. Check `SENTINEL_SOURCECONTROL_ID` matches the connection URL exactly
 
 </details>
 
 ---
 
-## 📖 Glossary
+**Before opening a PR:**
+- KQL tested in Sentinel Logs against real or representative data
+- Detection JSON validates locally: `cat Detections/rule.json | jq .`
+- Simulation function added and tested on isolated VM
+- EventIDs confirmed in Log Analytics
+- Cleanup confirmed working
+- `status` set to `Observation` — never `Active` on a new rule
 
-| Term | Plain English explanation |
-|---|---|
-| **AMA** | Azure Monitor Agent — software on endpoints that forwards Windows event logs to Log Analytics |
-| **ARM template** | A JSON file that tells Azure what resources to create — in this framework, each one defines a Sentinel detection rule |
-| **DaC** | Detection-as-Code — managing security detection rules as versioned, tested code rather than manual portal configurations |
-| **EventID 4624** | Windows log entry: a user successfully logged on |
-| **EventID 4625** | Windows log entry: a logon attempt failed |
-| **EventID 4688** | Windows log entry: a new process was created |
-| **EventID 4697** | Windows log entry: a service was installed on the system |
-| **Gate** | An automated check in the CI pipeline — all three must pass before anything deploys |
-| **GitHub Actions** | GitHub's built-in automation system — runs your pipeline whenever code changes |
-| **KQL** | Kusto Query Language — the language used to search data in Microsoft Sentinel |
-| **Log Analytics** | The Azure database where Sentinel stores all ingested log data |
-| **MITRE ATT&CK** | A public catalogue of real-world attacker techniques, used to tag and organize detection rules |
-| **PR / Pull Request** | A GitHub mechanism for proposing code changes — requires review before merging |
-| **Service principal** | A dedicated Azure identity for automation — like a robot user account with specific permissions |
-| **SIEM** | Security Information and Event Management — software that collects and analyses security logs |
-| **SOAR** | Security Orchestration, Automation and Response — automation for security incident workflows |
-| **Tactic** | In MITRE ATT&CK, the high-level goal (e.g., Persistence, Lateral Movement) |
-| **Technique** | In MITRE ATT&CK, the specific method used to achieve a tactic (e.g., T1543.003) |
+**Reviewer checklist:**
+- Does the KQL detect the actual technique or a proxy that generates excessive noise?
+- Do `columnName` values in `entityMappings` match real query output columns?
+- Is `apiVersion` set to `2022-11-01-preview` or later?
+- Is `status` set to `Observation`?
+- Is the simulation realistic enough to prove the detection path works end-to-end?
+- Has the false positive scenario been identified and handled or documented?
 
 ---
-
-## 🤝 Contributing
-
-1. Read this README fully before writing anything
-2. Branch from `main`: `git checkout -b detection/your-detection-name`
-3. Write your detection JSON using `Templates/detection-skeleton.json` as the base
-4. Test your KQL in Sentinel Logs before putting it in the JSON
-5. Add or update the simulation in `Validation/simulate_attack.ps1`
-6. Test the simulation locally on the isolated test VM and run cleanup
-7. Open a pull request using the PR template
-8. All three CI gates must pass — the PR stays blocked until they do
-
----
-Created by Mark Mooli
