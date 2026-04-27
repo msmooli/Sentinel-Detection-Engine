@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": { "description": "Log Analytics workspace name" }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2022-11-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/brute-force-t1110')]",
+      "kind": "Scheduled",
+      "location": "[parameters('location')]",
+      "properties": {
+
+        "displayName": "Brute Force — Repeated Failed Logons from Single Source (T1110)",
+
+        "description": "Detects five or more failed logon attempts (EventID 4625) from the same source IP within a 10-minute window. Critical severity — credential access is the inflection point for most attack chains. When this alert fires, immediately check whether any failure was followed by a successful logon (EventID 4624) from the same IP. If yes, escalate to P1. The query excludes loopback, link-local addresses, and machine accounts to reduce noise. Tune the failure threshold against your environment's baseline.",
+
+        "severity": "Critical",
+
+        "status": "Observation",
+
+        "enabled": true,
+
+        "query": "let FailureThreshold = 5;\nlet TimeWindow = 10m;\nSecurityEvent\n| where EventID == 4625\n| where TimeGenerated > ago(1h)\n| where AccountType == 'User'\n| where IpAddress !in ('127.0.0.1', '::1', '-', '')\n| where IpAddress !startswith '169.254'\n| summarize\n    FailureCount    = count(),\n    TargetAccounts  = make_set(TargetUserName, 20),\n    FirstAttempt    = min(TimeGenerated),\n    LastAttempt     = max(TimeGenerated),\n    Computer        = any(Computer)\n    by IpAddress, bin(TimeGenerated, TimeWindow)\n| where FailureCount >= FailureThreshold\n| extend AttackDurationSeconds = datetime_diff('second', LastAttempt, FirstAttempt)\n| project\n    TimeGenerated,\n    IpAddress,\n    FailureCount,\n    TargetAccounts,\n    FirstAttempt,\n    LastAttempt,\n    AttackDurationSeconds,\n    Computer\n| order by FailureCount desc",
+
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+
+        "tactics": [ "CredentialAccess" ],
+        "techniques": [ "T1110" ],
+
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              { "identifier": "Address", "columnName": "IpAddress" }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              { "identifier": "HostName", "columnName": "Computer" }
+            ]
+          }
+        ],
+
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Brute Force — {{FailureCount}} failed logons from {{IpAddress}}",
+          "alertDescriptionFormat": "{{FailureCount}} failed logon attempts from {{IpAddress}} between {{FirstAttempt}} and {{LastAttempt}}. Targeted accounts: {{TargetAccounts}}"
+        },
+
+        "incidentConfiguration": {
+          "createIncident": false,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        }
+      }
+    }
+  ]
+}
