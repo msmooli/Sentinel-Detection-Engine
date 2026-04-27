@@ -3,4 +3,231 @@ name: Detection-as-Code Pipeline
 on:
   push:
     branches: [ main ]
-...
+    paths:
+      - 'Detections/**'
+      - 'Validation/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Detections/**'
+      - 'Validation/**'
+
+jobs:
+
+  schema-validation:
+    name: Gate 1 — Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Validate detection templates
+        run: |
+          FAILED=0
+          for file in Detections/*.json; do
+            echo "Checking: $file"
+            if ! jq empty "$file" 2>/dev/null; then
+              echo "FAIL — Invalid JSON syntax in $file"
+              FAILED=1
+              continue
+            fi
+            FIELDS=(
+              ".resources[0].properties.displayName"
+              ".resources[0].properties.description"
+              ".resources[0].properties.severity"
+              ".resources[0].properties.status"
+              ".resources[0].properties.query"
+              ".resources[0].properties.queryFrequency"
+              ".resources[0].properties.queryPeriod"
+              ".resources[0].properties.tactics"
+              ".resources[0].properties.techniques"
+              ".resources[0].properties.entityMappings"
+            )
+            for field in "${FIELDS[@]}"; do
+              value=$(jq -r "$field" "$file" 2>/dev/null)
+              if [ "$value" = "null" ] || [ -z "$value" ]; then
+                echo "FAIL — Missing required field: $field"
+                FAILED=1
+              fi
+            done
+            SEV=$(jq -r '.resources[0].properties.severity' "$file")
+            if [[ ! "$SEV" =~ ^(Informational|Low|Medium|High|Critical)$ ]]; then
+              echo "FAIL — Invalid severity: $SEV"
+              FAILED=1
+            fi
+            STS=$(jq -r '.resources[0].properties.status' "$file")
+            if [[ ! "$STS" =~ ^(Observation|Active|Deprecated)$ ]]; then
+              echo "FAIL — Invalid status: $STS"
+              FAILED=1
+            fi
+            ENTITY_COUNT=$(jq '.resources[0].properties.entityMappings | length' "$file" 2>/dev/null)
+            if [ "$ENTITY_COUNT" -lt 1 ] 2>/dev/null; then
+              echo "FAIL — entityMappings must contain at least one entity"
+              FAILED=1
+            fi
+            API_VER=$(jq -r '.resources[0].apiVersion' "$file")
+            if [ "$API_VER" = "2020-01-01" ] || [ "$API_VER" = "2019-01-01-preview" ]; then
+              echo "FAIL — Outdated apiVersion $API_VER"
+              FAILED=1
+            fi
+            echo "PASS — $file"
+          done
+          if [ $FAILED -ne 0 ]; then
+            echo "Gate 1 FAILED"
+            exit 1
+          fi
+          echo "Gate 1 PASSED"
+
+  attack-simulation:
+    name: Gate 2 — Attack Simulation
+    runs-on: ubuntu-latest
+    needs: schema-validation
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Ensure test VM is running
+        run: |
+          az vm start \
+            --resource-group "${{ secrets.TEST_RESOURCE_GROUP }}" \
+            --name "${{ secrets.TEST_ENDPOINT_NAME }}" \
+            --no-wait
+          sleep 30
+
+      - name: Run simulation on isolated test endpoint
+        run: |
+          SCRIPT=$(cat Validation/simulate_attack.ps1)
+          OUTPUT=$(az vm run-command invoke \
+            --resource-group "${{ secrets.TEST_RESOURCE_GROUP }}" \
+            --name "${{ secrets.TEST_ENDPOINT_NAME }}" \
+            --command-id RunPowerShellScript \
+            --scripts "$SCRIPT" \
+            --output json)
+          echo "$OUTPUT" | jq -r '.value[0].message' 2>/dev/null || echo "$OUTPUT"
+          STATUS=$(echo "$OUTPUT" | jq -r '.value[0].code' 2>/dev/null)
+          if [[ "$STATUS" != *"succeeded"* ]]; then
+            echo "Gate 2 FAILED"
+            exit 1
+          fi
+          echo "Gate 2 PASSED"
+
+      - name: Cleanup artifacts on test endpoint
+        if: always()
+        run: |
+          az vm run-command invoke \
+            --resource-group "${{ secrets.TEST_RESOURCE_GROUP }}" \
+            --name "${{ secrets.TEST_ENDPOINT_NAME }}" \
+            --command-id RunPowerShellScript \
+            --scripts "
+              \$svc = Get-Service -Name 'LegitMicrosoftUpdate' -ErrorAction SilentlyContinue
+              if (\$svc) {
+                Stop-Service 'LegitMicrosoftUpdate' -Force -ErrorAction SilentlyContinue
+                sc.exe delete 'LegitMicrosoftUpdate' | Out-Null
+                Write-Host 'Cleanup complete.'
+              } else {
+                Write-Host 'Nothing to clean up.'
+              }
+            " --output none
+
+            alert-verification:
+    name: Gate 3 — Alert Verification
+    runs-on: ubuntu-latest
+    needs: attack-simulation
+    steps:
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Install Log Analytics CLI extension
+        run: az extension add --name log-analytics --only-show-errors
+
+      - name: Verify EventID 4697
+        run: |
+          MAX=10; INTERVAL=60
+          for i in $(seq 1 $MAX); do
+            echo "Attempt $i/$MAX..."
+            COUNT=$(az monitor log-analytics query \
+              --workspace "${{ secrets.LAW_WORKSPACE_ID }}" \
+              --analytics-query "SecurityEvent | where EventID == 4697 | where ServiceName == 'LegitMicrosoftUpdate' | where TimeGenerated > ago(15m) | count" \
+              --output json 2>/dev/null | jq -r '.[0].Count' 2>/dev/null)
+            if [[ "$COUNT" =~ ^[0-9]+$ ]] && [ "$COUNT" -gt 0 ]; then
+              echo "EventID 4697 confirmed."
+              break
+            fi
+            if [ $i -eq $MAX ]; then
+              echo "Gate 3 FAILED — EventID 4697 not found"
+              exit 1
+            fi
+            sleep $INTERVAL
+          done
+
+      - name: Verify EventID 4625
+        run: |
+          MAX=10; INTERVAL=60
+          for i in $(seq 1 $MAX); do
+            echo "Attempt $i/$MAX..."
+            COUNT=$(az monitor log-analytics query \
+              --workspace "${{ secrets.LAW_WORKSPACE_ID }}" \
+              --analytics-query "SecurityEvent | where EventID == 4625 | where TargetUserName == 'FakeAdmin_DACTest' | where TimeGenerated > ago(15m) | count" \
+              --output json 2>/dev/null | jq -r '.[0].Count' 2>/dev/null)
+            if [[ "$COUNT" =~ ^[0-9]+$ ]] && [ "$COUNT" -gt 0 ]; then
+              echo "EventID 4625 confirmed."
+              break
+            fi
+            if [ $i -eq $MAX ]; then
+              echo "Gate 3 FAILED — EventID 4625 not found"
+              exit 1
+            fi
+            sleep $INTERVAL
+          done
+          echo "Gate 3 PASSED"
+
+  deploy:
+    name: Deploy to Sentinel
+    runs-on: ubuntu-latest
+    needs: alert-verification
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Trigger Sentinel repository sync
+        run: |
+          az rest \
+            --method POST \
+            --uri "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.SENTINEL_RESOURCE_GROUP }}/providers/Microsoft.OperationalInsights/workspaces/${{ secrets.SENTINEL_WORKSPACE_NAME }}/providers/Microsoft.SecurityInsights/sourcecontrols/${{ secrets.SENTINEL_SOURCECONTROL_ID }}/triggerDeployment?api-version=2023-02-01" \
+            --body '{}'
+          echo "Sync triggered. Rules live in Sentinel within 2-3 minutes."
