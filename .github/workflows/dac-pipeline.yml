@@ -228,6 +228,8 @@ jobs:
 
       - name: Verify EventID 4697 — New Service Creation
         run: |
+          echo "Waiting 5 minutes for AMA ingestion..."
+          sleep 300
           echo "=================================================="
           echo "  Gate 3a: Verifying EventID 4697 in Log Analytics"
           echo "=================================================="
@@ -242,7 +244,7 @@ jobs:
                 Event
                 | where EventID == 4697
                 | where ServiceName == 'LegitMicrosoftUpdate'
-                | where TimeGenerated > ago(15m)
+                | where TimeGenerated > ago(30m)
                 | count" \
               --output json 2>/dev/null \
               | jq -r '.[0].Count' 2>/dev/null)
