@@ -243,7 +243,7 @@ jobs:
               --analytics-query "
                 Event
                 | where EventID == 4697
-                | where ServiceName == 'LegitMicrosoftUpdate'
+                | where ServiceName == 'RenderedDescription'
                 | where TimeGenerated > ago(30m)
                 | count" \
               --output json 2>/dev/null \
