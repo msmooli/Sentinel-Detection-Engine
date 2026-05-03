@@ -239,7 +239,7 @@ jobs:
             COUNT=$(az monitor log-analytics query \
               --workspace "${{ secrets.LAW_WORKSPACE_ID }}" \
               --analytics-query "
-                SecurityEvent
+                Event
                 | where EventID == 4697
                 | where ServiceName == 'LegitMicrosoftUpdate'
                 | where TimeGenerated > ago(15m)
@@ -274,7 +274,7 @@ jobs:
             COUNT=$(az monitor log-analytics query \
               --workspace "${{ secrets.LAW_WORKSPACE_ID }}" \
               --analytics-query "
-                SecurityEvent
+                Event
                 | where EventID == 4625
                 | where TargetUserName == 'FakeAdmin_DACTest'
                 | where TimeGenerated > ago(15m)
