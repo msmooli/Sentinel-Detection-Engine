@@ -163,12 +163,13 @@ jobs:
           echo "=================================================="
 
           SCRIPT=$(cat Validation/simulate_attack.ps1)
+          PREFIXED=$'$env:DAC_TEST_ENDPOINT = \'true\'\n[System.Environment]::SetEnvironmentVariable(\'DAC_TEST_ENDPOINT\',\'true\',\'Machine\')\n'"$SCRIPT"
 
           OUTPUT=$(az vm run-command invoke \
             --resource-group "${{ secrets.TEST_RESOURCE_GROUP }}" \
             --name           "${{ secrets.TEST_ENDPOINT_NAME }}" \
             --command-id     RunPowerShellScript \
-            --scripts        "$SCRIPT" \
+            --scripts        "$PREFIXED" \
             --output json)
 
           echo "$OUTPUT" | jq -r '.value[0].message' 2>/dev/null || echo "$OUTPUT"
