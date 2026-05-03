@@ -243,7 +243,7 @@ jobs:
               --analytics-query "
                 Event
                 | where EventID == 4697
-                | where ServiceName == 'RenderedDescription'
+                | where RenderedDescription contains 'LegitMicrosoftUpdate'
                 | where TimeGenerated > ago(30m)
                 | count" \
               --output json 2>/dev/null \
@@ -280,8 +280,8 @@ jobs:
               --analytics-query "
                 Event
                 | where EventID == 4625
-                | where TargetUserName == 'FakeAdmin_DACTest'
-                | where TimeGenerated > ago(15m)
+                | where RenderedDescription contains 'FakeAdmin_DACTest'
+                | where TimeGenerated > ago(30m)
                 | count" \
               --output json 2>/dev/null \
               | jq -r '.[0].Count' 2>/dev/null)
