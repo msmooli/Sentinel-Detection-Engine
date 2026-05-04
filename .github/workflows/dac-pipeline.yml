@@ -161,22 +161,28 @@ jobs:
           echo "=================================================="
           echo "  Gate 2: Running attack simulation"
           echo "=================================================="
-
-          SCRIPT=$(cat Validation/simulate_attack.ps1)
-          PREFIXED=$'$env:DAC_TEST_ENDPOINT = \'true\'\n[System.Environment]::SetEnvironmentVariable(\'DAC_TEST_ENDPOINT\',\'true\',\'Machine\')\n'"$SCRIPT"
-
           OUTPUT=$(az vm run-command invoke \
             --resource-group "${{ secrets.TEST_RESOURCE_GROUP }}" \
             --name           "${{ secrets.TEST_ENDPOINT_NAME }}" \
             --command-id     RunPowerShellScript \
-            --scripts        "$PREFIXED" \
+            --scripts "
+              \$svc = Get-Service -Name 'LegitMicrosoftUpdate' -ErrorAction SilentlyContinue
+              if (\$svc) { Stop-Service 'LegitMicrosoftUpdate' -Force -ErrorAction SilentlyContinue; sc.exe delete 'LegitMicrosoftUpdate' | Out-Null }
+              New-Service -Name 'LegitMicrosoftUpdate' -BinaryPathName 'C:\Windows\System32\cmd.exe' -StartupType Manual | Out-Null
+              Write-Host 'Service created successfully'
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword1 2>&1
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword2 2>&1
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword3 2>&1
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword4 2>&1
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword5 2>&1
+              \$net = net use \\\\127.0.0.1 /user:FakeAdmin_DACTest WrongPassword6 2>&1
+              Write-Host 'Brute force attempts complete'
+            " \
             --output json)
-
-          echo "$OUTPUT" | jq -r '.value[0].message' 2>/dev/null || echo "$OUTPUT"
-
+          echo "$OUTPUT" | jq -r '.value[0].message' 2>/dev/null
           STATUS=$(echo "$OUTPUT" | jq -r '.value[0].code' 2>/dev/null)
           if [[ "$STATUS" != *"succeeded"* ]]; then
-            echo "❌ Gate 2 FAILED — simulation script returned non-zero exit."
+            echo "❌ Gate 2 FAILED"
             exit 1
           fi
           echo "✅ Gate 2 PASSED — simulation complete."
