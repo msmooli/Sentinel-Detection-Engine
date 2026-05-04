@@ -20,7 +20,7 @@ Most security teams manage detection rules directly in their SIEM portal. This c
 | **No testing** | Rules are deployed and assumed to work. Most teams never verify they actually fire |
 | **No rollback** | A noisy rule floods the SOC queue at 2am and there's no clean way to undo it |
 
-This framework treats detection rules the same way software teams treat application code — version controlled, peer reviewed, automatically tested, and deployed through a pipeline. Every rule is proven to fire before it reaches production. Every change has an author, a diff, and a reviewer.
+This framework treats detection rules the same way software teams treat application code; version controlled, peer reviewed, automatically tested, and deployed through a pipeline. Every rule is proven to fire before it reaches production. Every change has an author, a diff, and a reviewer.
 
 ---
 
