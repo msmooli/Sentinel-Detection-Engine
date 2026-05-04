@@ -4,7 +4,7 @@
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-v14-red)](https://attack.mitre.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A GitOps pipeline that manages the full lifecycle of Microsoft Sentinel analytics rules. Detection logic lives in Git — versioned, peer reviewed, red-team validated, and deployed via ARM. The portal is read-only.
+A GitOps pipeline that manages the full lifecycle of Microsoft Sentinel analytics rules. Detection logic lives in Git — versioned, peer reviewed, red-team validated, and deployed via ARM. 
 
 > Built by [Mark Mooli](https://github.com/msmooli)
 
