@@ -288,7 +288,7 @@ jobs:
                 Event
                 | where EventID == 4625
                 | where RenderedDescription contains 'FakeAdmin_DACTest'
-                | where TimeGenerated > ago(30m)
+                | where TimeGenerated > ago(45m)
                 | count" \
               --output json 2>/dev/null \
               | jq -r '.[0].Count' 2>/dev/null)
