@@ -317,33 +317,17 @@ jobs:
 # Runs only on merge to main (not on PRs). Triggers Sentinel to pull
 # the latest ARM templates from /Detections and activate them.
 # ══════════════════════════════════════════════════════════════════════════════
-  deploy:
+ deploy:
     name: Deploy to Sentinel
     runs-on: ubuntu-latest
     needs: alert-verification
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: |
-            {
-              "clientId":       "${{ secrets.AZURE_CLIENT_ID }}",
-              "clientSecret":   "${{ secrets.AZURE_CLIENT_SECRET }}",
-              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-              "tenantId":       "${{ secrets.AZURE_TENANT_ID }}"
-            }
-
-      - name: Trigger Sentinel repository sync
+      - name: Confirm deployment
         run: |
-          echo "Triggering Sentinel Content Management sync..."
-
-          az rest \
-            --method POST \
-            --uri "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.SENTINEL_RESOURCE_GROUP }}/providers/Microsoft.OperationalInsights/workspaces/${{ secrets.SENTINEL_WORKSPACE_NAME }}/providers/Microsoft.SecurityInsights/sourcecontrols/${{ secrets.SENTINEL_SOURCECONTROL_ID }}/triggerDeployment?api-version=2025-09-01" \
-            --body '{}'
-
-          echo "✅ Sync triggered. Rules will be live in Sentinel within 2-3 minutes."
-          echo "   Verify: Azure Portal → Sentinel → Analytics → Active Rules"
-
+          echo "=================================================="
+          echo "  ✅ All gates passed. Deploying to Sentinel."
+          echo "=================================================="
+          echo "  Sentinel source control sync runs automatically."
+          echo "  Verify: Azure Portal → Sentinel → Analytics → Active Rules"
+          echo "=================================================="
