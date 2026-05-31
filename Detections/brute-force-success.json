@@ -4,7 +4,7 @@
   "parameters": { 
     "workspaceName": {
       "type": "string",
-      "metadata": { "description": "Log Analytics workspace name" }
+      "metadata": { "description": "Log Analytics workspace name" } 
     },
     "location": {
       "type": "string",
