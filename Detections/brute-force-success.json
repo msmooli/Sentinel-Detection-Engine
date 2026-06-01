@@ -59,9 +59,8 @@
         ],
 
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Brute Force — {{FailureCount}} failed logons from {{IpAddress}}",
-          "alertDescriptionFormat": "{{FailureCount}} failed logon attempts from {{IpAddress}}. Targeted accounts: {{TargetAccounts}}"
-
+          "alertDisplayNameFormat": "Brute Force - {{FailureCount}} failed logons from {{IpAddress}}",
+          "alertDescriptionFormat": "{{FailureCount}} failed logons from {{IpAddress}} targeting {{TargetAccounts}}"
         "incidentConfiguration": {
           "createIncident": false,
           "groupingConfiguration": {
