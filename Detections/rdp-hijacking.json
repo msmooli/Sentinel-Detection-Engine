@@ -41,7 +41,7 @@
         "suppressionEnabled": false,
 
         "tactics": [ "LateralMovement" ],
-        "techniques": [ "T1563.002" ],
+        "techniques": [ "T1563" ],
 
         "entityMappings": [
           {
