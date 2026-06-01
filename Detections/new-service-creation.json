@@ -41,7 +41,7 @@
         "suppressionEnabled": false,
 
         "tactics": [ "Persistence" ],
-        "techniques": [ "T1543.003" ],
+        "techniques": [ "T1543" ],
 
         "entityMappings": [
           {
