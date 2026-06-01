@@ -40,7 +40,8 @@ jobs:
 
           FAILED=0
 
-          for file in Detections/*.json; do
+         for file in Detections/*.json; do
+           if [[ "$file" == *.parameters.json ]]; then continue; fi
             echo ""
             echo "Checking: $file"
 
