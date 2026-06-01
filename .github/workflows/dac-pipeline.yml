@@ -317,7 +317,7 @@ jobs:
 # Runs only on merge to main (not on PRs). Triggers Sentinel to pull
 # the latest ARM templates from /Detections and activate them.
 
-  deploy:
+  deploy: 
     name: Deploy to Sentinel
     runs-on: ubuntu-latest
     needs: alert-verification
