@@ -1,6 +1,6 @@
 FileName, CommitSha
-Detections/new-service-creation.json,4147d28dcbdc6a82d9ae7d06b5db9151f784464c
 Detections/rdp-hijacking.json,6fe7a0997cb8a6cbcb34306943bfb17bcfd6aba2
-Detections/new-service-creation.parameters.json,96e55e563469a5e39292402617c9632941a16fb9
 Detections/rdp-hijacking.parameters.json,96e55e563469a5e39292402617c9632941a16fb9
+Detections/new-service-creation.parameters.json,96e55e563469a5e39292402617c9632941a16fb9
+Detections/new-service-creation.json,4147d28dcbdc6a82d9ae7d06b5db9151f784464c
 
