@@ -24,7 +24,7 @@
 
         "description": "Detects five or more failed logon attempts (EventID 4625) from the same source IP within a 10-minute window. Critical severity — credential access is the inflection point for most attack chains. When this alert fires, immediately check whether any failure was followed by a successful logon (EventID 4624) from the same IP. If yes, escalate to P1. The query excludes loopback, link-local addresses, and machine accounts to reduce noise. Tune the failure threshold against your environment's baseline.",
 
-        "severity": "Critical",
+        "severity": "High",
 
         "status": "Observation",
 
