@@ -1,5 +1,5 @@
-# Sentinel Detection Engine
-### Enterprise Detection-as-Code (DaC) Framework — Microsoft Sentinel
+# Sentinel Detection Pipeline
+### Enterprise Detection-as-Code (DaC) Pipeline — Microsoft Sentinel
 
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-v14-red)](https://attack.mitre.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
