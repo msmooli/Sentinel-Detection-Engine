@@ -1,10 +1,10 @@
 # Sentinel Detection Pipeline
-### Enterprise Detection-as-Code (DaC) Pipeline — Microsoft Sentinel
+### Enterprise Detection-as-Code (DaC) Pipeline - Microsoft Sentinel
 
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-v14-red)](https://attack.mitre.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A GitOps pipeline that manages the full lifecycle of Microsoft Sentinel analytics rules. Detection logic lives in Git — versioned, peer reviewed, red-team validated, and deployed via ARM. 
+A GitOps pipeline that manages the full lifecycle of Microsoft Sentinel analytics rules. Detection logic lives in Git; versioned, peer reviewed, red-team validated, and deployed via ARM. 
 
 > Built by [Mark Mooli](https://github.com/msmooli)
 
@@ -16,9 +16,9 @@ Most security teams manage detection rules directly in their SIEM portal. This c
 
 | Problem | Real-world consequence |
 |---|---|
-| **No audit trail** | Rules get silently modified — no record of who changed what or why |
+| **No audit trail** | Rules get silently modified with no record of who changed what or why |
 | **No testing** | Rules are deployed and assumed to work. Most teams never verify they actually fire |
-| **No rollback** | A noisy rule floods the SOC queue at 2am and there's no clean way to undo it |
+| **No rollback** | A noisy rule floods the SOC queue at 2am and there's no way to undo it |
 
 This framework treats detection rules the same way software teams treat application code; version controlled, peer reviewed, automatically tested, and deployed through a pipeline. Every rule is proven to fire before it reaches production. Every change has an author, a diff, and a reviewer.
 
@@ -58,7 +58,7 @@ This framework treats detection rules the same way software teams treat applicat
 │                              ▼                                        │
 │  4. Detection rule is live — alert fires when a real attack matches  │
 │                                                                       │
-│  ❌ Any gate fails → PR blocked. Nothing deploys.                    │
+│   Any gate fails → PR blocked. Nothing deploys.                    │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -280,13 +280,13 @@ The simulation script checks for this variable at startup and exits immediately 
 **Settings → Branches → Add branch protection rule**
 
 - Branch name pattern: `main`
-- ✅ Require a pull request before merging
-- ✅ Require approvals: `1`
-- ✅ Require status checks to pass:
+- Require a pull request before merging
+- Require approvals: `1`
+- Require status checks to pass:
   - `Gate 1 — Schema Validation`
   - `Gate 2 — Attack Simulation`
   - `Gate 3 — Alert Verification`
-- ✅ Do not allow bypassing the above settings
+- Do not allow bypassing the above settings
 
 Without this, every gate is advisory. Anyone with write access can push to `main` and skip the pipeline entirely.
 
@@ -597,30 +597,6 @@ AzureActivity
 ```
 
 ---
-
-## No Azure Access?
-
-You don't need Azure access to learn the core skills in this framework.
-
-**Practice KQL right now — no account required:**
-Microsoft's Log Analytics demo environment is pre-loaded with real security data.
-→ [https://aka.ms/lademo](https://aka.ms/lademo)
-
-```kql
--- Brute force pattern (T1110)
-SecurityEvent
-| where EventID == 4625
-| where TimeGenerated > ago(24h)
-| summarize FailureCount = count() by IpAddress, TargetUserName
-| where FailureCount > 5
-| order by FailureCount desc
-
--- Service creation (T1543.003)
-SecurityEvent
-| where EventID == 4697
-| project TimeGenerated, Computer, ServiceName, ServiceFileName, SubjectUserName
-| order by TimeGenerated desc
-```
 
 **Free Azure trial — full pipeline practice:**
 90 days + $200 credit. Enough to run this framework end-to-end.
